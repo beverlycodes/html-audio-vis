@@ -1,6 +1,7 @@
 function drawAtFPS(fps, func) {
   const interval = 1000 / fps
   let then = Date.now()
+  let stop = false
 
   function draw() {
     const now = Date.now()
@@ -13,11 +14,23 @@ function drawAtFPS(fps, func) {
     }
   }
 
-  draw()
+  if (!stop) {
+    draw()
+  }
+
+  return function() {
+    stop = true
+  }
 }
 
 function encapsulate(func) {
   func()
+}
+
+function whenAll(values, action) {
+  if (values.every((x) => !!(typeof x === 'function' ? x() : x))) {
+    action()
+  }
 }
 
 function join(events, joiner = func(), context) {
@@ -64,7 +77,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function runAudio(audio) {
-    console.log(audio.src)
     audio.play()
 
     return async function() {
@@ -74,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function runVisualization(layers) {
-    drawAtFPS(60, function() {
+    return drawAtFPS(60, function() {
       canvasCtx.clearRect(0, 0, canvas.width, canvas.height)
       for (layer of layers) {
         layer()
@@ -95,11 +107,47 @@ document.addEventListener('DOMContentLoaded', function() {
     document.dispatchEvent(new CustomEvent('audio-ready', { detail: audio }))
   })
 
+  document
+    .querySelector('#visualization-picker')
+    .addEventListener('change', function({ target }) {
+      document.dispatchEvent(
+        new CustomEvent('visualization.selected', { detail: target.value })
+      )
+    })
+
   once('audio-ready', function() {
     document.dispatchEvent(
       new CustomEvent('audio-context-config-change', { detail: {} })
     )
   })
+
+  // vizualization-picker: populate
+  join(
+    {
+      'visualization-picker-ready': 'visualizationPicker',
+      'config-ready': function({ detail: { visualizations } }, context) {
+        context.visualizations = visualizations
+      },
+    },
+    function({ visualizationPicker, visualizations }) {
+      if (visualizationPicker && visualizations) {
+        visualizationPicker.innerHtml = ''
+
+        for (const [key, { name }] of Object.entries(visualizations)) {
+          const node = document.createElement('option')
+          node.appendChild(document.createTextNode(name))
+          node.value = key
+          visualizationPicker.appendChild(node)
+        }
+
+        document.dispatchEvent(
+          new CustomEvent('visualization.selected', {
+            detail: visualizationPicker.value,
+          })
+        )
+      }
+    }
+  )
 
   encapsulate(function() {
     let audioContext = null
@@ -181,8 +229,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   )
 
+  // visualization: run
   encapsulate(function() {
+    let currentAudio = null
+    let currentVisualization = null
     let stopAudio = null
+    let stopVisualization = null
 
     join(
       {
@@ -191,37 +243,63 @@ document.addEventListener('DOMContentLoaded', function() {
           ;(context.audioAnalyserLeft = detail.audioAnalyserLeft),
             (context.audioAnalyserRight = detail.audioAnalyserRight)
         },
-        'config-ready': 'config',
+        'config-ready': function({ detail }, context) {
+          context.visualizerConfig = detail.visualizer
+          context.visualizations = detail.visualizations
+        },
+        'visualization.selected': 'visualization',
       },
-      function({ audio, audioAnalyserLeft, audioAnalyserRight, config = {} }) {
-        if (audio && audioAnalyserLeft && audioAnalyserRight) {
-          if (stopAudio) {
-            stopAudio()
-            stopAudio = null
+      function({
+        audio,
+        audioAnalyserLeft,
+        audioAnalyserRight,
+        visualization,
+        visualizations,
+        visualizerConfig = {},
+      }) {
+        whenAll(
+          [
+            audio,
+            audioAnalyserLeft,
+            audioAnalyserRight,
+            visualization,
+            visualizations,
+            visualizerConfig,
+          ],
+          function() {
+            const { visualizer } = visualizations[visualization]
+
+            if (audio !== currentAudio) {
+              if (stopAudio) {
+                stopAudio()
+                stopAudio = null
+              }
+
+              stopAudio = runAudio(audio)
+              currentAudio = audio
+            }
+
+            if (visualization !== currentVisualization) {
+              if (stopVisualization) {
+                stopVisualization()
+                stopVisualization = null
+              }
+
+              stopVisualization = runVisualization([
+                visualizer(
+                  audioAnalyserLeft,
+                  canvas,
+                  canvasCtx,
+                  visualizerConfig
+                ),
+                visualizer(audioAnalyserRight, canvas, canvasCtx, {
+                  ...visualizerConfig,
+                  flip: true,
+                }),
+              ])
+            }
           }
-
-          stopAudio = runAudio(audio)
-
-          runVisualization([
-            getStereoSplitWaveformVisualizer(
-              audioAnalyserLeft,
-              canvas,
-              canvasCtx,
-              {
-                bands: config.bands,
-              }
-            ),
-            getStereoSplitWaveformVisualizer(
-              audioAnalyserRight,
-              canvas,
-              canvasCtx,
-              {
-                bands: config.bands,
-                flip: true,
-              }
-            ),
-          ])
-        }
+        )
       }
     )
   })
@@ -229,10 +307,25 @@ document.addEventListener('DOMContentLoaded', function() {
   onResize()
 
   document.dispatchEvent(
+    new CustomEvent('visualization-picker-ready', {
+      detail: document.querySelector('#visualization-picker'),
+    })
+  )
+
+  document.dispatchEvent(
     new CustomEvent('config-ready', {
       detail: {
-        bands: 32,
-        fftSize: Math.pow(2, 12),
+        visualizer: {
+          bands: 32,
+          fftSize: Math.pow(2, 12),
+        },
+        visualizations: {
+          bands: { name: 'Bands', visualizer: getBandVisualizer },
+          'stereo-split-waveform': {
+            name: 'Stereo Split',
+            visualizer: getStereoSplitWaveformVisualizer,
+          },
+        },
       },
     })
   )

@@ -17,10 +17,27 @@ body {
   position: relative;
 }
 
-#file-picker {
+#file-picker-field {
+  flex: 1 0 auto;
+}
+
+#visualization-picker-field {
+  display: flex;
+  flex: 0;
+  flex-wrap: nowrap;
+}
+
+#visualization-picker-field > select {
+  margin-left: 1em;
+}
+
+#ui-form {
   position: absolute;
   left: 0;
   top: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
 }
 
 #main {

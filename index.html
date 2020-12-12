@@ -5,7 +5,16 @@
   <body>
     <div id="main">
       <canvas id="canvas"></canvas>
-      <input id="file-picker" type="file" accept="audio/*" />
+
+      <form id="ui-form">
+        <div id="file-picker-field">
+          <input id="file-picker" type="file" accept="audio/*" />
+        </div>
+        <div id="visualization-picker-field">
+          <label>Visualization</label>
+          <select id="visualization-picker"></select>
+        </div>
+      </form>
     </div>
 
     <script type="text/javascript" src="./stereo-split-waveform.js"></script>
