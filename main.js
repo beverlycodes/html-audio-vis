@@ -6,7 +6,13 @@ function drawAtFPS(fps, func) {
   function draw() {
     const now = Date.now()
     const elapsed = now - then
-    requestAnimationFrame(draw)
+
+    if (!stop) {
+      requestAnimationFrame(draw)
+    } else {
+      console.log('Visualization canceled')
+      return
+    }
 
     if (elapsed > interval) {
       then = now - (elapsed % interval)
@@ -14,9 +20,7 @@ function drawAtFPS(fps, func) {
     }
   }
 
-  if (!stop) {
-    draw()
-  }
+  draw()
 
   return function() {
     stop = true
