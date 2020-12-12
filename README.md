@@ -4,7 +4,7 @@ Experimentation in audio visualizations for web.
 
 ## Demo
 
-See it in action: <https://beverlycodes.github.io/html-audio.vis>
+See it in action: <https://beverlycodes.github.io/html-audio-vis>
 
 ## Usage
 
